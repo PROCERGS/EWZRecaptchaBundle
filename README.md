@@ -166,7 +166,17 @@ ewz_recaptcha:
     // ...
     enabled: false
 ```
+You can configure some proxy configuration too:
+``` yaml
+# app/config/config.yml
 
+ewz_recaptcha:
+    // ...
+    http_proxy:
+    	host: proxy.mycompany.com
+    	port: 3128
+    	auth: proxy_username:proxy_password
+```
 Congratulations! You're ready!
 
 ## Basic Usage
