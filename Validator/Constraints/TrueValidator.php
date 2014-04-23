@@ -98,32 +98,57 @@ class TrueValidator extends ConstraintValidator
      */
     private function httpPost($host, $path, $data, $port = 80)
     {
-        $req = $this->getQSEncode($data);
-
-        $http_request  = "POST $path HTTP/1.0\r\n";
-        $http_request .= "Host: $host\r\n";
-        $http_request .= "Content-Type: application/x-www-form-urlencoded;\r\n";
-        $http_request .= "Content-Length: ".strlen($req)."\r\n";
-        $http_request .= "User-Agent: reCAPTCHA/PHP\r\n";
-        $http_request .= "\r\n";
-        $http_request .= $req;
-
-        $response = null;
-        if (!$fs = @fsockopen($host, $port, $errno, $errstr, 10)) {
+        $req = http_build_query($data);
+        $url = "http://$host$path";
+        if (ini_get('allow_url_fopen')) {
+            $opts['http'] = array(
+                'method' => "POST", 
+                'user-agent' => 'reCAPTCHA/PHP', 
+                'timeout' => 10,
+                'header' => "Content-Type: application/x-www-form-urlencoded\r\nContent-Length: " . strlen($req)."\r\n",
+                'content' => $req
+            );
+            $httpProxy = $this->container->getParameter('ewz_recaptcha.http_proxy');
+            if (isset($httpProxy['host'], $httpProxy['port'])) {            
+                $opts['http']['proxy'] = 'tcp://' . $httpProxy['host'] . ':' . $httpProxy['port'];
+                $opts['http']['request_fulluri'] = true;
+                if (isset($httpProxy['auth'])) {
+                    $opts['http']['header'] .= "Proxy-Authorization: Basic ".base64_encode($httpProxy['auth'])."\r\n";
+                }
+            }
+            $context = stream_context_create(($opts));
+    
+            if (!$response = file_get_contents($url, false, $context)) {
+                throw new ValidatorException('Could not open socket');
+            }
+            return array(1=>$response);
+        } elseif (function_exists('curl_init')) {
+            $ch = curl_init();
+            curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
+            curl_setopt($ch, CURLOPT_HEADER, 0);
+            curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+            if (ini_get('open_basedir')) {
+                //@TODO some gambi                
+            } else {
+                curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
+            }
+            curl_setopt($ch, CURLOPT_POST, 1);
+            curl_setopt($ch, CURLOPT_POSTFIELDS, $req);
+            curl_setopt($ch, CURLOPT_URL, $url);
+            if (isset($httpProxy['host'], $httpProxy['port'])) {
+                curl_setopt($ch, CURLOPT_PROXYTYPE, $httpProxy['type']);
+                curl_setopt($ch, CURLOPT_PROXY, $httpProxy['host']);
+                curl_setopt($ch, CURLOPT_PROXYPORT, $httpProxy['port']);
+                if (isset($httpProxy['auth'])) {
+                    curl_setopt($ch, CURLOPT_PROXYUSERPWD, $httpProxy['auth']);
+                }
+            }
+            $response = curl_exec($ch);
+            curl_close($ch);
+            return array(1=>$response);
+        } else {
             throw new ValidatorException('Could not open socket');
         }
-
-        fwrite($fs, $http_request);
-
-        while (!feof($fs)) {
-            $response .= fgets($fs, 1160); // one TCP-IP packet
-        }
-
-        fclose($fs);
-
-        $response = explode("\r\n\r\n", $response, 2);
-
-        return $response;
     }
 
     /**
