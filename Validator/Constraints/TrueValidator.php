@@ -100,6 +100,7 @@ class TrueValidator extends ConstraintValidator
     {
         $req = http_build_query($data);
         $url = "http://$host$path";
+        $httpProxy = $this->container->getParameter('ewz_recaptcha.http_proxy');
         if (ini_get('allow_url_fopen')) {
             $opts['http'] = array(
                 'method' => "POST", 
@@ -108,7 +109,6 @@ class TrueValidator extends ConstraintValidator
                 'header' => "Content-Type: application/x-www-form-urlencoded\r\nContent-Length: " . strlen($req)."\r\n",
                 'content' => $req
             );
-            $httpProxy = $this->container->getParameter('ewz_recaptcha.http_proxy');
             if (isset($httpProxy['host'], $httpProxy['port'])) {            
                 $opts['http']['proxy'] = 'tcp://' . $httpProxy['host'] . ':' . $httpProxy['port'];
                 $opts['http']['request_fulluri'] = true;
